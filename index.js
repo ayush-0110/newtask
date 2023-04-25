@@ -93,10 +93,28 @@ function authenticate(req, res, next) {
   }
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_REGEX = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*]).{6,}$/;
+
+
 app.post("/register", async (req, res) => {
   const { username, password } = req.body;
 
+  if (!EMAIL_REGEX.test(username)) {
+    return res.status(400).json({ error: "Invalid email" });
+  }
+
+  // Validate password
+  if (!PASSWORD_REGEX.test(password)) {
+    return res.status(400).json({
+      error:
+        "Password must be at least 6 characters long and contain at least 1 lowercase letter, 1 uppercase letter, 1 digit, and 1 special character (!@#$%^&*)",
+    });
+  }
+  
   const hashedPassword = await bcrypt.hash(password, 10);
+
+
 
   try {
     const result = await usersCollection.insertOne({
