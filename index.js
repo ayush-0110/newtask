@@ -1,3 +1,4 @@
+const { createClient } = require('redis');
 const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -5,7 +6,6 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { MongoClient, ObjectId } = require("mongodb");
 require("dotenv").config();
-const { createClient } = require("redis");
 
 const path = require("path");
 app.use(express.static(path.join(__dirname)));
@@ -22,16 +22,20 @@ const client = createClient({
   },
 });
 
-client.on("connect", () => {
-  console.log("Connected to Redis");
-  console.log(client);
-});
+
+
+async function main() {
+    await client.connect();
+console.log("Connected to Redis");
+// client.on("connect", () => {
+//     console.log("Connected to Redis");
+//   console.log(client);
+// });
 
 client.on("error", (error) => {
   console.error("Error connecting to Redis:", error);
 });
 
-async function main() {
   const mongoClient = new MongoClient(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -166,32 +170,76 @@ app.post("/shorten", async (req, res) => {
 app.get("/:shortCode", async (req, res) => {
   const { shortCode } = req.params;
 
-  client.get(shortCode, async (error, cachedUrl) => {
-    if (error) {
-      return res.status(500).json({ error: "Error fetching URL from cache" });
-    }
 
+//   try {
+//     const cachedUrl = await client.get(shortCode);
+//     if (cachedUrl) {
+//       res.redirect(cachedUrl);
+//     } else {
+//       let urlDocument;
+//       try {
+//         urlDocument = await urlCollection.findOne({ shortCode });
+//       } catch (error) {
+//         return res
+//           .status(500)
+//           .json({ error: "Error fetching URL from database" });
+//       }
+//       if (!urlDocument) {
+//         return res.status(404).json({ error: "Short URL not found" });
+//       }
+//       await client.setexAsync(shortCode, 3600, urlDocument.originalUrl);
+//       res.redirect(urlDocument.originalUrl);
+//     }
+//   } catch (error) {
+//     console.error("Error fetching URL from cache", error);
+//     return res.status(500).json({ error: "Error fetching URL from cache" });
+//   }
+
+
+try {
+    const cachedUrl = await client.get(shortCode);
     if (cachedUrl) {
       res.redirect(cachedUrl);
     } else {
-      let urlDocument;
-      try {
-        urlDocument = await urlCollection.findOne({ shortCode });
-      } catch (error) {
-        return res
-          .status(500)
-          .json({ error: "Error fetching URL from database" });
-      }
-
+      const urlDocument = await urlCollection.findOne({ shortCode });
       if (!urlDocument) {
         return res.status(404).json({ error: "Short URL not found" });
       }
-
-      await client.setexAsync(shortCode, 3600, urlDocument.originalUrl);
-
+      await client.setEx(shortCode, 3600, urlDocument.originalUrl);
       res.redirect(urlDocument.originalUrl);
     }
-  });
+  } catch (error) {
+    console.error("Error fetching URL from cache or database", error);
+    return res.status(500).json({ error: "Error fetching URL from cache or database" });
+  }
+
+
+//   await client.get(shortCode, async (error, cachedUrl) => {
+//     if (error) {
+//       return res.status(500).json({ error: "Error fetching URL from cache" });
+//     }
+
+//     if (cachedUrl) {
+//       res.redirect(cachedUrl);
+//     } else {
+//       let urlDocument;
+//       try {
+//         urlDocument = await urlCollection.findOne({ shortCode });
+//       } catch (error) {
+//         return res
+//           .status(500)
+//           .json({ error: "Error fetching URL from database" });
+//       }
+
+//       if (!urlDocument) {
+//         return res.status(404).json({ error: "Short URL not found" });
+//       }
+
+//       await client.setexAsync(shortCode, 3600, urlDocument.originalUrl);
+
+//       res.redirect(urlDocument.originalUrl);
+//     }
+//   });
 });
 
 app.listen(PORT, () => {
